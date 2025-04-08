@@ -177,7 +177,7 @@ def main():
     initial_sidebar_state="expanded"
   )
   
-  with open(r"C:\Users\intern.eunice\OneDrive - Khazanah Nasional Berhad\Desktop\streamlit_learn\streamlit-cancer-predict-main\assets\style.css") as f:
+  with open("assets/style.css") as f:
     st.markdown("<style>{}</style>".format(f.read()), unsafe_allow_html=True)
   
   input_data = add_sidebar()
