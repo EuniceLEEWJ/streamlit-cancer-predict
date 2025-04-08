@@ -144,8 +144,8 @@ def get_radar_chart(input_data):
 
 
 def add_predictions(input_data):
-  model = pickle.load(open(r"C:\Users\intern.eunice\OneDrive - Khazanah Nasional Berhad\Desktop\streamlit_learn\streamlit-cancer-predict-main\model\model.pkl", "rb"))
-  scaler = pickle.load(open(r"C:\Users\intern.eunice\OneDrive - Khazanah Nasional Berhad\Desktop\streamlit_learn\streamlit-cancer-predict-main\model\scaler.pkl", "rb"))
+  model = pickle.load(open("model/model.pkl", "rb"))
+  scaler = pickle.load(open("model/scaler.pkl", "rb"))
   
   input_array = np.array(list(input_data.values())).reshape(1, -1)
   
