@@ -9,7 +9,7 @@ import numpy as np
 #usually import data from a database or an API
 # import os
 def get_clean_data():
-  data = pd.read_csv(r"C:\Users\intern.eunice\OneDrive - Khazanah Nasional Berhad\Desktop\streamlit_learn\streamlit-cancer-predict-main\data\data.csv")
+  data = pd.read_csv("data/data.csv")
   
   data = data.drop(['Unnamed: 32', 'id'], axis=1)
   
