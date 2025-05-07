@@ -1,19 +1,20 @@
-import streamlit as st 
-import pickle
+import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import numpy as np
+import pickle
+import plotly.graph_objects as go
 
-# Load and clean dataset
-def get_clean_data(df=None):
-    if df is None:
-        df = pd.read_csv("data/data.csv")
+# Load dataset and clean
+@st.cache_data
+def get_clean_data():
+    df = pd.read_csv("data/data.csv")
     df = df.drop(columns=['Unnamed: 32', 'id'], errors='ignore')
     if 'diagnosis' in df.columns:
         df['diagnosis'] = df['diagnosis'].map({'M': 1, 'B': 0})
     return df
 
-# Unified input: slider + number input
+# Sidebar slider + number input
+
 def sync_input(label, min_val, max_val, default_val, key):
     synced_key = f"{key}_synced"
     slider_key = f"{key}_slider"
@@ -34,48 +35,19 @@ def sync_input(label, min_val, max_val, default_val, key):
 
     col1, col2 = st.sidebar.columns([2, 1])
     with col1:
-        st.slider(label, min_val, max_val, key=slider_key, on_change=slider_changed)
+        st.slider(label, min_val, max_val,
+                  key=slider_key, on_change=slider_changed)
     with col2:
-        st.number_input(" ", min_val, max_val, key=input_key, on_change=input_changed)
+        st.number_input(" ", min_val, max_val,
+                        key=input_key, on_change=input_changed)
 
     return st.session_state[synced_key]
 
 # Sidebar input collection
+
 def add_sidebar(data):
     st.sidebar.header("Cell Nuclei Measurements")
-
-    slider_labels = [
-        ("Radius (mean)", "radius_mean"),
-        ("Texture (mean)", "texture_mean"),
-        ("Perimeter (mean)", "perimeter_mean"),
-        ("Area (mean)", "area_mean"),
-        ("Smoothness (mean)", "smoothness_mean"),
-        ("Compactness (mean)", "compactness_mean"),
-        ("Concavity (mean)", "concavity_mean"),
-        ("Concave points (mean)", "concave points_mean"),
-        ("Symmetry (mean)", "symmetry_mean"),
-        ("Fractal dimension (mean)", "fractal_dimension_mean"),
-        ("Radius (se)", "radius_se"),
-        ("Texture (se)", "texture_se"),
-        ("Perimeter (se)", "perimeter_se"),
-        ("Area (se)", "area_se"),
-        ("Smoothness (se)", "smoothness_se"),
-        ("Compactness (se)", "compactness_se"),
-        ("Concavity (se)", "concavity_se"),
-        ("Concave points (se)", "concave points_se"),
-        ("Symmetry (se)", "symmetry_se"),
-        ("Fractal dimension (se)", "fractal_dimension_se"),
-        ("Radius (worst)", "radius_worst"),
-        ("Texture (worst)", "texture_worst"),
-        ("Perimeter (worst)", "perimeter_worst"),
-        ("Area (worst)", "area_worst"),
-        ("Smoothness (worst)", "smoothness_worst"),
-        ("Compactness (worst)", "compactness_worst"),
-        ("Concavity (worst)", "concavity_worst"),
-        ("Concave points (worst)", "concave points_worst"),
-        ("Symmetry (worst)", "symmetry_worst"),
-        ("Fractal dimension (worst)", "fractal_dimension_worst"),
-    ]
+    slider_labels = [(label.replace('_', ' ').title(), label) for label in data.columns if label != 'diagnosis']
 
     input_dict = {}
     for label, key in slider_labels:
@@ -83,168 +55,121 @@ def add_sidebar(data):
         max_val = float(data[key].max())
         default_val = float(data[key].mean())
         input_dict[key] = sync_input(label, min_val, max_val, default_val, key)
+    return [input_dict]  # Return as list for consistency
 
-    return input_dict
+# Radar chart
 
-# Scale values between 0 and 1 for radar chart
-def get_scaled_values(input_dict, reference_data):
+def get_scaled_values(row_dict, reference_data):
     X = reference_data.drop(['diagnosis'], axis=1, errors='ignore')
-    scaled_dict = {}
-
-    for key, value in input_dict.items():
-        max_val = X[key].max()
+    scaled = {}
+    for key, value in row_dict.items():
         min_val = X[key].min()
-        scaled_dict[key] = (value - min_val) / (max_val - min_val)
+        max_val = X[key].max()
+        scaled[key] = (value - min_val) / (max_val - min_val)
+    return scaled
 
-    return scaled_dict
-
-# Generate radar chart
 def get_radar_chart(input_data, reference_data):
-    input_data = get_scaled_values(input_data, reference_data)
+    scaled = get_scaled_values(input_data, reference_data)
+    categories = ['Radius', 'Texture', 'Perimeter', 'Area', 'Smoothness', 'Compactness', 
+                  'Concavity', 'Concave Points', 'Symmetry', 'Fractal Dimension']
+    mean_keys = ['radius_mean', 'texture_mean', 'perimeter_mean', 'area_mean',
+                 'smoothness_mean', 'compactness_mean', 'concavity_mean',
+                 'concave points_mean', 'symmetry_mean', 'fractal_dimension_mean']
 
-    categories = ['Radius', 'Texture', 'Perimeter', 'Area', 
-                  'Smoothness', 'Compactness', 
-                  'Concavity', 'Concave Points',
-                  'Symmetry', 'Fractal Dimension']
+    se_keys = ['radius_se', 'texture_se', 'perimeter_se', 'area_se',
+               'smoothness_se', 'compactness_se', 'concavity_se',
+               'concave points_se', 'symmetry_se', 'fractal_dimension_se']
+
+    worst_keys = ['radius_worst', 'texture_worst', 'perimeter_worst', 'area_worst',
+                  'smoothness_worst', 'compactness_worst', 'concavity_worst',
+                  'concave points_worst', 'symmetry_worst', 'fractal_dimension_worst']
 
     fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(r=[scaled[k] for k in mean_keys], theta=categories, fill='toself', name='Mean'))
+    fig.add_trace(go.Scatterpolar(r=[scaled[k] for k in se_keys], theta=categories, fill='toself', name='SE'))
+    fig.add_trace(go.Scatterpolar(r=[scaled[k] for k in worst_keys], theta=categories, fill='toself', name='Worst'))
 
-    fig.add_trace(go.Scatterpolar(
-        r=[input_data['radius_mean'], input_data['texture_mean'], input_data['perimeter_mean'],
-           input_data['area_mean'], input_data['smoothness_mean'], input_data['compactness_mean'],
-           input_data['concavity_mean'], input_data['concave points_mean'], input_data['symmetry_mean'],
-           input_data['fractal_dimension_mean']],
-        theta=categories,
-        fill='toself',
-        name='Mean Value'
-    ))
-
-    fig.add_trace(go.Scatterpolar(
-        r=[input_data['radius_se'], input_data['texture_se'], input_data['perimeter_se'],
-           input_data['area_se'], input_data['smoothness_se'], input_data['compactness_se'],
-           input_data['concavity_se'], input_data['concave points_se'], input_data['symmetry_se'],
-           input_data['fractal_dimension_se']],
-        theta=categories,
-        fill='toself',
-        name='Standard Error'
-    ))
-
-    fig.add_trace(go.Scatterpolar(
-        r=[input_data['radius_worst'], input_data['texture_worst'], input_data['perimeter_worst'],
-           input_data['area_worst'], input_data['smoothness_worst'], input_data['compactness_worst'],
-           input_data['concavity_worst'], input_data['concave points_worst'], input_data['symmetry_worst'],
-           input_data['fractal_dimension_worst']],
-        theta=categories,
-        fill='toself',
-        name='Worst Value'
-    ))
-
-    fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
-        showlegend=True
-    )
-    
+    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=True)
     return fig
 
-# Load model and scaler
-@st.cache_resource
-def load_model_and_scaler():
+# Prediction logic
+
+def add_predictions(input_dicts):
     model = pickle.load(open("model/model.pkl", "rb"))
     scaler = pickle.load(open("model/scaler.pkl", "rb"))
-    return model, scaler
 
-# Make prediction and display result
-def add_predictions(input_data, model, scaler):
-    input_array = np.array(list(input_data.values())).reshape(1, -1)
-    input_array_scaled = scaler.transform(input_array)
+    input_array = pd.DataFrame(input_dicts)
+    input_scaled = scaler.transform(input_array)
 
-    prediction = model.predict(input_array_scaled)
-    probs = model.predict_proba(input_array_scaled)[0]
+    preds = model.predict(input_scaled)
+    probs = model.predict_proba(input_scaled)
 
-    st.subheader("Cell Cluster Prediction")
-    if prediction[0] == 0:
-        st.success("Benign")
-    else:
-        st.error("Malignant")
+    output_df = input_array.copy()
+    output_df['Prediction'] = ['Benign' if p == 0 else 'Malignant' for p in preds]
+    output_df['Benign_Prob'] = probs[:, 0]
+    output_df['Malignant_Prob'] = probs[:, 1]
 
-    st.write(f"Probability of being benign: {probs[0]:.3f}")
-    st.write(f"Probability of being malignant: {probs[1]:.3f}")
-    st.info("This app assists in medical diagnosis but is not a replacement for professional medical advice.")
+    st.subheader("Prediction Results")
+    with st.expander("Show Prediction Table", expanded=True):
+        st.dataframe(output_df.round(3), use_container_width=True)
+
+    if len(input_dicts) == 1:
+        if preds[0] == 0:
+            st.success("Benign")
+        else:
+            st.error("Malignant")
+        st.write(f"Probability of being benign: {probs[0][0]:.3f}")
+        st.write(f"Probability of being malignant: {probs[0][1]:.3f}")
 
 # Main app
+
 def main():
-    st.set_page_config(
-        page_title="Breast Cancer Predictor",
-        page_icon="🧬",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
+    st.set_page_config(page_title="Breast Cancer Predictor", page_icon="🧬", layout="wide")
 
     with open("assets/style.css") as f:
         st.markdown("<style>{}</style>".format(f.read()), unsafe_allow_html=True)
 
     st.title("Breast Cancer Predictor")
-    st.write("Adjust inputs in the sidebar or upload a file. Below is a preview of your inputs and predictions.\n\n\n")
+    st.write("Adjust inputs in the sidebar or upload an Excel file. Predictions and charts will be shown below.")
 
-    uploaded_file = st.sidebar.file_uploader("Upload your own CSV", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("Upload an Excel file", type=["xlsx"])
     reference_data = get_clean_data()
-    model, scaler = load_model_and_scaler()
+
+    input_data_list = []
 
     if uploaded_file is not None:
         try:
-            user_df = pd.read_csv(uploaded_file)
-            st.sidebar.success("Custom file uploaded.")
+            user_df = pd.read_excel(uploaded_file)
+            st.sidebar.success("File uploaded.")
 
             required_cols = reference_data.drop("diagnosis", axis=1).columns
             if not set(required_cols).issubset(set(user_df.columns)):
                 st.sidebar.error("Uploaded file is missing required columns.")
                 return
 
-            if user_df.shape[0] == 1:
-                input_data = user_df.iloc[0].to_dict()
-                st.subheader("Input Parameters")
-                st.dataframe(pd.DataFrame([input_data]), use_container_width=True)
-
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    st.plotly_chart(get_radar_chart(input_data, reference_data), use_container_width=True)
-                with col2:
-                    add_predictions(input_data, model, scaler)
-
-            else:
-                predictions = []
-                for index, row in user_df.iterrows():
-                    input_data = row.to_dict()
-                    input_array = np.array(list(input_data.values())).reshape(1, -1)
-                    input_array_scaled = scaler.transform(input_array)
-
-                    pred = model.predict(input_array_scaled)[0]
-                    probs = model.predict_proba(input_array_scaled)[0]
-
-                    predictions.append({
-                        "Patient #": index + 1,
-                        "Prediction": "Malignant" if pred else "Benign",
-                        "Probability Benign": round(probs[0], 3),
-                        "Probability Malignant": round(probs[1], 3)
-                    })
-
-                with st.expander("🔍 View Prediction Results Table", expanded=True):
-                    st.dataframe(pd.DataFrame(predictions), use_container_width=True)
+            input_data_list = user_df[required_cols].to_dict(orient='records')
 
         except Exception as e:
-            st.sidebar.error(f"Error processing file: {e}")
+            st.sidebar.error(f"Error reading file: {e}")
             return
 
     else:
-        input_data = add_sidebar(reference_data)
+        input_data_list = add_sidebar(reference_data)
+
+    if len(input_data_list) == 1:
         st.subheader("Input Parameters")
-        st.dataframe(pd.DataFrame([input_data]), use_container_width=True)
+        st.dataframe(pd.DataFrame(input_data_list), use_container_width=True)
 
         col1, col2 = st.columns([4, 1])
         with col1:
-            st.plotly_chart(get_radar_chart(input_data, reference_data), use_container_width=True)
+            radar_chart = get_radar_chart(input_data_list[0], reference_data)
+            st.plotly_chart(radar_chart, use_container_width=True)
+
         with col2:
-            add_predictions(input_data, model, scaler)
+            add_predictions(input_data_list)
+
+    else:
+        add_predictions(input_data_list)
 
 if __name__ == '__main__':
     main()
