@@ -6,7 +6,7 @@ The Breast Cancer Diagnosis app is a machine learning-powered tool designed to a
 
 The app was developed as a machine learning exercice from the public dataset [Breast Cancer Wisconsin (Diagnostic) Data Set](https://www.kaggle.com/datasets/uciml/breast-cancer-wisconsin-data). 
 
-A live version of the application can be found on (https://app-cancer-predict-sv3lzycxo8pvf43e8q2497.streamlit.app/)
+https://app-cancer-predict-sv3lzycxo8pvf43e8q2497.streamlit.app/
 
 ## Installation
 
