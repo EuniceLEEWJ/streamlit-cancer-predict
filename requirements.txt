@@ -63,3 +63,5 @@ urllib3==2.3.0
 watchdog==6.0.0
 yarg==0.1.10
 yfinance==0.2.57
+openpyxl
+
