@@ -3,13 +3,16 @@ import pickle
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+import os
 from io import BytesIO
 
 # Load and clean dataset
 def get_clean_data():
-    data = pd.read_csv("data/data.csv")
+    # Ensure the file is properly located in the deployed environment
+    data_path = os.path.join("data", "data.csv") if os.path.exists("data") else "data.csv"
+    data = pd.read_csv(data_path)
     data = data.drop(['Unnamed: 32', 'id'], axis=1)
-    data['diagnosis'] = data['diagnosis'].map({ 'M': 1, 'B': 0 })
+    data['diagnosis'] = data['diagnosis'].map({'M': 1, 'B': 0})
     return data
 
 # Unified input: slider + number input
@@ -136,8 +139,12 @@ def main():
     if 'saved_inputs' not in st.session_state:
         st.session_state.saved_inputs = []
 
-    with open("assets/style.css") as f:
-        st.markdown("<style>{}</style>".format(f.read()), unsafe_allow_html=True)
+    # Ensure styles are applied correctly
+    try:
+        with open("assets/style.css") as f:
+            st.markdown("<style>{}</style>".format(f.read()), unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("Custom styles could not be applied as the style.css file was not found.")
 
     reference_data = get_clean_data()
     uploaded_file = st.sidebar.file_uploader("Upload your own CSV", type=["csv"])
@@ -167,7 +174,7 @@ def main():
     col1, col2 = st.columns([4, 1])
     with col1:
         radar_chart = get_radar_chart(input_data, reference_data)
-        st.plotly_chart(radar_chart, use_container_width=True)
+        st.plotly_chart(radar_chart, use_contain_width=True)
     with col2:
         add_predictions(input_data)
 
