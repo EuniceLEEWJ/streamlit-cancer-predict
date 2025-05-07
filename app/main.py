@@ -34,14 +34,9 @@ def sync_input(label, min_val, max_val, default_val, key):
 
     col1, col2 = st.sidebar.columns([2, 1])
     with col1:
-        st.slider(label, min_val, max_val,
-                  key=slider_key,
-                  on_change=slider_changed)
-
+        st.slider(label, min_val, max_val, key=slider_key, on_change=slider_changed)
     with col2:
-        st.number_input(" ", min_val, max_val,
-                        key=input_key,
-                        on_change=input_changed)
+        st.number_input(" ", min_val, max_val, key=input_key, on_change=input_changed)
 
     return st.session_state[synced_key]
 
@@ -151,15 +146,20 @@ def get_radar_chart(input_data, reference_data):
     
     return fig
 
-# Make prediction and display result
-def add_predictions(input_data):
+# Load model and scaler
+@st.cache_resource
+def load_model_and_scaler():
     model = pickle.load(open("model/model.pkl", "rb"))
     scaler = pickle.load(open("model/scaler.pkl", "rb"))
+    return model, scaler
 
+# Make prediction and display result
+def add_predictions(input_data, model, scaler):
     input_array = np.array(list(input_data.values())).reshape(1, -1)
     input_array_scaled = scaler.transform(input_array)
 
     prediction = model.predict(input_array_scaled)
+    probs = model.predict_proba(input_array_scaled)[0]
 
     st.subheader("Cell Cluster Prediction")
     if prediction[0] == 0:
@@ -167,7 +167,6 @@ def add_predictions(input_data):
     else:
         st.error("Malignant")
 
-    probs = model.predict_proba(input_array_scaled)[0]
     st.write(f"Probability of being benign: {probs[0]:.3f}")
     st.write(f"Probability of being malignant: {probs[1]:.3f}")
     st.info("This app assists in medical diagnosis but is not a replacement for professional medical advice.")
@@ -185,11 +184,11 @@ def main():
         st.markdown("<style>{}</style>".format(f.read()), unsafe_allow_html=True)
 
     st.title("Breast Cancer Predictor")
-    st.write("Adjust inputs in the sidebar or upload a file. Below is a preview of your inputs and predictions.\n\n\n\n\n")
+    st.write("Adjust inputs in the sidebar or upload a file. Below is a preview of your inputs and predictions.\n\n\n")
 
     uploaded_file = st.sidebar.file_uploader("Upload your own CSV", type=["csv"])
-
     reference_data = get_clean_data()
+    model, scaler = load_model_and_scaler()
 
     if uploaded_file is not None:
         try:
@@ -199,31 +198,53 @@ def main():
             required_cols = reference_data.drop("diagnosis", axis=1).columns
             if not set(required_cols).issubset(set(user_df.columns)):
                 st.sidebar.error("Uploaded file is missing required columns.")
-                return  # Safely exit if file is invalid
+                return
 
-            if user_df.shape[0] > 1:
-                st.sidebar.warning("Multiple rows detected, using the first row.")
+            if user_df.shape[0] == 1:
+                input_data = user_df.iloc[0].to_dict()
+                st.subheader("Input Parameters")
+                st.dataframe(pd.DataFrame([input_data]), use_container_width=True)
 
-            input_data = user_df.iloc[0].to_dict()
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.plotly_chart(get_radar_chart(input_data, reference_data), use_container_width=True)
+                with col2:
+                    add_predictions(input_data, model, scaler)
+
+            else:
+                predictions = []
+                for index, row in user_df.iterrows():
+                    input_data = row.to_dict()
+                    input_array = np.array(list(input_data.values())).reshape(1, -1)
+                    input_array_scaled = scaler.transform(input_array)
+
+                    pred = model.predict(input_array_scaled)[0]
+                    probs = model.predict_proba(input_array_scaled)[0]
+
+                    predictions.append({
+                        "Patient #": index + 1,
+                        "Prediction": "Malignant" if pred else "Benign",
+                        "Probability Benign": round(probs[0], 3),
+                        "Probability Malignant": round(probs[1], 3)
+                    })
+
+                with st.expander("🔍 View Prediction Results Table", expanded=True):
+                    st.dataframe(pd.DataFrame(predictions), use_container_width=True)
 
         except Exception as e:
             st.sidebar.error(f"Error processing file: {e}")
-            return  # Exit gracefully if error
+            return
 
     else:
         input_data = add_sidebar(reference_data)
+        st.subheader("Input Parameters")
+        st.dataframe(pd.DataFrame([input_data]), use_container_width=True)
 
-    # Display inputs and prediction
-    st.subheader("Input Parameters")
-    st.dataframe(pd.DataFrame([input_data]), use_container_width=True)
-
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        radar_chart = get_radar_chart(input_data, reference_data)
-        st.plotly_chart(radar_chart, use_container_width=True)
-
-    with col2:
-        add_predictions(input_data)
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.plotly_chart(get_radar_chart(input_data, reference_data), use_container_width=True)
+        with col2:
+            add_predictions(input_data, model, scaler)
 
 if __name__ == '__main__':
     main()
